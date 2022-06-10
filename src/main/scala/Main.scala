@@ -37,6 +37,8 @@ object SubscriptionServiceImpl extends SubscriptionHttpService[IO] {
       List(Subscription("organization", "repository", Option(Timestamp.nowUTC())))
     )
   )
+
+  override def create(userid: String): IO[Unit] = IO.unit
 }
 
 object Routes {
