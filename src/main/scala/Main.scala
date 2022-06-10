@@ -5,8 +5,10 @@ import com.comcast.ip4s._
 import org.http4s._
 import org.http4s.ember.server._
 import org.http4s.implicits._
+import smithy4s.Timestamp
 import smithy4s.hello._
 import smithy4s.http4s.SimpleRestJsonBuilder
+import smithy4s.subscriptions._
 
 object HelloWorldImpl {
   def make[F[_]: Applicative](service: Service[F]): HelloWorldService[F] =
@@ -29,14 +31,28 @@ object Service {
   }
 }
 
+object SubscriptionServiceImpl extends SubscriptionHttpService[IO] {
+  override def get(userid: String): IO[SubscriptionsByUserResponse] = IO.pure(
+    SubscriptionsByUserResponse(
+      List(Subscription("organization", "repository", Option(Timestamp.nowUTC())))
+    )
+  )
+}
+
 object Routes {
   private val example: Resource[IO, HttpRoutes[IO]] =
     SimpleRestJsonBuilder.routes(HelloWorldImpl.make[IO](Service.make)).resource
 
+  private val subscriptionRoutes: Resource[IO, HttpRoutes[IO]] =
+    SimpleRestJsonBuilder.routes(SubscriptionServiceImpl).resource
+
+  private val subscriptionDocs: HttpRoutes[IO] =
+    smithy4s.http4s.swagger.docs[IO](SubscriptionHttpService)
+
   private val docs: HttpRoutes[IO] =
     smithy4s.http4s.swagger.docs[IO](HelloWorldService)
 
-  val all: Resource[IO, HttpRoutes[IO]] = example.map(_ <+> docs)
+  val all: Resource[IO, HttpRoutes[IO]] = subscriptionRoutes.map(_ <+> subscriptionDocs)
 }
 
 object Main extends IOApp.Simple {
@@ -45,7 +61,7 @@ object Main extends IOApp.Simple {
     .flatMap { routes =>
       EmberServerBuilder
         .default[IO]
-        .withPort(port"9000")
+        .withPort(port"8081")
         .withHost(host"localhost")
         .withHttpApp(routes.orNotFound)
         .build
